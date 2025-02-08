@@ -33,6 +33,7 @@ string totalRow = $"Total,PAS,Giannina,{totalMatches},{homeWins},{homeDraws},{ho
 
 // Append the total row to the data
 formattedLines.Add(totalRow);
+formattedLines.Insert(0, "Pos,Team, ,Pld,Won,Drn,Lst,For,Ag,Won,Drn,Lst,For,Ag,Pts");
 
 const string path = @"C:\Program Files (x86)\Championship Manager 01-02\BenchResultFormatted.xls";
 File.WriteAllLines(path, formattedLines);
