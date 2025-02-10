@@ -9,6 +9,7 @@ var config = new ConfigurationBuilder()
 var sourceFolder = config["SourceFolder"]!;
 var consolidationFile = config["ConsolidationFile"]!;
 var statsFile = config["StatsFile"]!;
+var stats2File = config["Stats2File"]!;
 
 if (!Directory.Exists(sourceFolder))
 {
@@ -19,6 +20,7 @@ if (!Directory.Exists(sourceFolder))
 var subDirectories = Directory.GetDirectories(sourceFolder);
 File.Delete(consolidationFile);
 File.Delete(statsFile);
+File.Delete(stats2File);
 
 foreach (var subDir in subDirectories)
 {
@@ -36,6 +38,10 @@ foreach (var subDir in subDirectories)
 
 var tacticPositionCounts = ParseAndCountPositions(consolidationFile);
 WritePositionCountsToCsv(statsFile, tacticPositionCounts);
+Console.WriteLine($"Stats file written to {statsFile}.");
+
+CalculateAndWriteStatistics(consolidationFile, stats2File);
+Console.WriteLine($"Statistics file written to {stats2File}.");
 
 Console.ReadLine();
 
@@ -150,11 +156,74 @@ static void WritePositionCountsToCsv(string filePath, Dictionary<string, Diction
 {
     // Write to CSV
     using var writer = new StreamWriter(filePath);
-    writer.WriteLine("Tactic Name," + string.Join(",", Enumerable.Range(1, 14)));
+    var header = "Tactic Name,1st,2nd,3rd," + string.Join(",", Enumerable.Range(4, 11).Select(i => i + "th"));
+    writer.WriteLine(header);
 
     foreach (var tactic in tacticPositionCounts)
     {
         var counts = Enumerable.Range(1, 14).Select(pos => tactic.Value.GetValueOrDefault(pos, 0));
         writer.WriteLine($"{tactic.Key},{string.Join(",", counts)}");
     }
+}
+
+static void CalculateAndWriteStatistics(string consolidationFile, string statsFile)
+{
+    var lines = File.ReadAllLines(consolidationFile).Skip(1); // Skip header
+    var tacticGroups = lines.GroupBy(line => line.Split(',')[16].Trim());
+
+    using var writer = new StreamWriter(statsFile);
+    writer.WriteLine("Tactic Name,Avg Goals,Avg Conceded,Avg GD,Avg Points,Max Points,Min Points,Points Std Dev,Max Goals,Min Goals,Goals Std Dev,Max Conceded,Min Conceded,Conceded Std Dev,Max GD,Min GD,GD Std Dev");
+
+    foreach (var group in tacticGroups)
+    {
+        var tacticName = group.Key;
+        var points = new List<int>();
+        var goals = new List<int>();
+        var conceded = new List<int>();
+        var goalDifferences = new List<int>();
+
+        foreach (var line in group)
+        {
+            var columns = line.Split(',');
+            if (columns.Length < 15 || columns[0] == "Total") continue;
+
+            int pointsValue = int.Parse(columns[14]);
+            int goalsFor = int.Parse(columns[7]) + int.Parse(columns[12]);
+            int goalsAgainst = int.Parse(columns[8]) + int.Parse(columns[13]);
+            int goalDifference = goalsFor - goalsAgainst;
+
+            points.Add(pointsValue);
+            goals.Add(goalsFor);
+            conceded.Add(goalsAgainst);
+            goalDifferences.Add(goalDifference);
+        }
+
+        if (points.Count == 0) continue;
+
+        double avgGoals = goals.Average();
+        double avgConceded = conceded.Average();
+        double avgGoalDifference = goalDifferences.Average();
+        double avgPoints = points.Average();
+        int maxPoints = points.Max();
+        int minPoints = points.Min();
+        double pointsStdDev = CalculateStandardDeviation(points);
+        int maxGoals = goals.Max();
+        int minGoals = goals.Min();
+        double goalsStdDev = CalculateStandardDeviation(goals);
+        int maxConceded = conceded.Max();
+        int minConceded = conceded.Min();
+        double concededStdDev = CalculateStandardDeviation(conceded);
+        int maxGoalDifference = goalDifferences.Max();
+        int minGoalDifference = goalDifferences.Min();
+        double goalDifferenceStdDev = CalculateStandardDeviation(goalDifferences);
+
+        writer.WriteLine($"{tacticName},{avgGoals:F2},{avgConceded:F2},{avgGoalDifference:F2},{avgPoints:F2},{maxPoints},{minPoints},{pointsStdDev:F2},{maxGoals},{minGoals},{goalsStdDev:F2},{maxConceded},{minConceded},{concededStdDev:F2},{maxGoalDifference},{minGoalDifference},{goalDifferenceStdDev:F2}");
+    }
+}
+
+static double CalculateStandardDeviation(List<int> values)
+{
+    double avg = values.Average();
+    double sumOfSquaresOfDifferences = values.Select(val => (val - avg) * (val - avg)).Sum();
+    return Math.Sqrt(sumOfSquaresOfDifferences / values.Count);
 }
