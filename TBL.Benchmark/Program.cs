@@ -7,7 +7,8 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var sourceFolder = config["SourceFolder"]!;
-var outputFile = config["ConsolidationFile"]!;
+var consolidationFile = config["ConsolidationFile"]!;
+var statsFile = config["StatsFile"]!;
 
 if (!Directory.Exists(sourceFolder))
 {
@@ -16,21 +17,25 @@ if (!Directory.Exists(sourceFolder))
 }
 
 var subDirectories = Directory.GetDirectories(sourceFolder);
-File.Delete(outputFile);
+File.Delete(consolidationFile);
+File.Delete(statsFile);
 
 foreach (var subDir in subDirectories)
 {
     var filePath = Path.Combine(subDir, "benchresult.txt");
     var finalPath = Path.Combine(subDir, "BenchResultFormatted.csv");
-
-    if (File.Exists(filePath) && !File.Exists(finalPath))
+    File.Delete(finalPath);
+    if (File.Exists(filePath))
     {
         var formattedLines = ProcessFile(filePath, subDir);
         WriteFormattedLines(finalPath, formattedLines);
-        AppendToConsolidationFile(outputFile, formattedLines, subDir == subDirectories[0]);
+        AppendToConsolidationFile(consolidationFile, formattedLines, subDir == subDirectories[0]);
         Console.WriteLine($"Benchmark operation is completed for {Path.GetFileName(subDir)}.");
     }
 }
+
+var tacticPositionCounts = ParseAndCountPositions(consolidationFile);
+WritePositionCountsToCsv(statsFile, tacticPositionCounts);
 
 Console.ReadLine();
 
@@ -49,7 +54,7 @@ List<string> ProcessFile(string filePath, string subDir)
     var lastDirectory = Path.GetFileName(subDir.TrimEnd(Path.DirectorySeparatorChar));
     double seasonCount = formattedLines.Count;
 
-    var (totalMatches, homeWins, homeDraws, homeLosses, homeGoalsFor, homeGoalsAgainst, awayWins, awayDraws, awayLosses, awayGoalsFor, awayGoalsAgainst, totalPoints) = 
+    var (totalMatches, homeWins, homeDraws, homeLosses, homeGoalsFor, homeGoalsAgainst, awayWins, awayDraws, awayLosses, awayGoalsFor, awayGoalsAgainst, totalPoints) =
         AggregateValues(formattedLines);
 
     for (var index = 0; index < formattedLines.Count; index++)
@@ -83,7 +88,7 @@ void AppendToConsolidationFile(string streamedFile, List<string> formattedLines,
     writer.Flush();
 }
 
-(int totalMatches, int homeWins, int homeDraws, int homeLosses, int homeGoalsFor, int homeGoalsAgainst, int awayWins, int awayDraws, int awayLosses, int awayGoalsFor, int awayGoalsAgainst, int totalPoints) 
+(int totalMatches, int homeWins, int homeDraws, int homeLosses, int homeGoalsFor, int homeGoalsAgainst, int awayWins, int awayDraws, int awayLosses, int awayGoalsFor, int awayGoalsAgainst, int totalPoints)
 AggregateValues(List<string> formattedLines)
 {
     int totalMatches = 0, homeWins = 0, homeDraws = 0, homeLosses = 0;
@@ -109,4 +114,47 @@ AggregateValues(List<string> formattedLines)
     }
 
     return (totalMatches, homeWins, homeDraws, homeLosses, homeGoalsFor, homeGoalsAgainst, awayWins, awayDraws, awayLosses, awayGoalsFor, awayGoalsAgainst, totalPoints);
+}
+
+static Dictionary<string, Dictionary<int, int>> ParseAndCountPositions(string filePath)
+{
+    var tacticPositionCounts = new Dictionary<string, Dictionary<int, int>>();
+
+    var lines = File.ReadAllLines(filePath);
+    foreach (var line in lines.Skip(1)) // Skip header
+    {
+        var columns = line.Split(',');
+        if (columns.Length <= 17) continue; // Ensure there are enough columns
+
+        var positionString = columns[0].Trim();
+        var tacticName = columns[16].Trim();
+
+        if (int.TryParse(positionString.TrimEnd('s', 't', 'n', 'd', 'r', 'h'), out var position))
+        {
+            if (!tacticPositionCounts.ContainsKey(tacticName))
+            {
+                tacticPositionCounts[tacticName] = new Dictionary<int, int>();
+            }
+
+            if (!tacticPositionCounts[tacticName].TryAdd(position, 1))
+            {
+                tacticPositionCounts[tacticName][position]++;
+            }
+        }
+    }
+
+    return tacticPositionCounts;
+}
+
+static void WritePositionCountsToCsv(string filePath, Dictionary<string, Dictionary<int, int>> tacticPositionCounts)
+{
+    // Write to CSV
+    using var writer = new StreamWriter(filePath);
+    writer.WriteLine("Tactic Name," + string.Join(",", Enumerable.Range(1, 14)));
+
+    foreach (var tactic in tacticPositionCounts)
+    {
+        var counts = Enumerable.Range(1, 14).Select(pos => tactic.Value.GetValueOrDefault(pos, 0));
+        writer.WriteLine($"{tactic.Key},{string.Join(",", counts)}");
+    }
 }
