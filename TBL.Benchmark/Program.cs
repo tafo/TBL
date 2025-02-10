@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 
 var config = new ConfigurationBuilder()
     .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile("appSettings.json", optional: false, reloadOnChange: true)
     .Build();
 
 var sourceFolder = config["SourceFolder"]!;
@@ -13,7 +13,7 @@ var stats2File = config["Stats2File"]!;
 
 if (!Directory.Exists(sourceFolder))
 {
-    Console.WriteLine("The specified directory does not exist! Please update the appsettings.json file!");
+    Console.WriteLine("The specified directory does not exist! Please update the appSettings.json file!");
     return;
 }
 
@@ -187,10 +187,10 @@ static void CalculateAndWriteStatistics(string consolidationFile, string statsFi
             var columns = line.Split(',');
             if (columns.Length < 15 || columns[0] == "Total") continue;
 
-            int pointsValue = int.Parse(columns[14]);
-            int goalsFor = int.Parse(columns[7]) + int.Parse(columns[12]);
-            int goalsAgainst = int.Parse(columns[8]) + int.Parse(columns[13]);
-            int goalDifference = goalsFor - goalsAgainst;
+            var pointsValue = int.Parse(columns[14]);
+            var goalsFor = int.Parse(columns[7]) + int.Parse(columns[12]);
+            var goalsAgainst = int.Parse(columns[8]) + int.Parse(columns[13]);
+            var goalDifference = goalsFor - goalsAgainst;
 
             points.Add(pointsValue);
             goals.Add(goalsFor);
@@ -200,22 +200,22 @@ static void CalculateAndWriteStatistics(string consolidationFile, string statsFi
 
         if (points.Count == 0) continue;
 
-        double avgGoals = goals.Average();
-        double avgConceded = conceded.Average();
-        double avgGoalDifference = goalDifferences.Average();
-        double avgPoints = points.Average();
-        int maxPoints = points.Max();
-        int minPoints = points.Min();
-        double pointsStdDev = CalculateStandardDeviation(points);
-        int maxGoals = goals.Max();
-        int minGoals = goals.Min();
-        double goalsStdDev = CalculateStandardDeviation(goals);
-        int maxConceded = conceded.Max();
-        int minConceded = conceded.Min();
-        double concededStdDev = CalculateStandardDeviation(conceded);
-        int maxGoalDifference = goalDifferences.Max();
-        int minGoalDifference = goalDifferences.Min();
-        double goalDifferenceStdDev = CalculateStandardDeviation(goalDifferences);
+        var avgGoals = goals.Average();
+        var avgConceded = conceded.Average();
+        var avgGoalDifference = goalDifferences.Average();
+        var avgPoints = points.Average();
+        var maxPoints = points.Max();
+        var minPoints = points.Min();
+        var pointsStdDev = CalculateStandardDeviation(points);
+        var maxGoals = goals.Max();
+        var minGoals = goals.Min();
+        var goalsStdDev = CalculateStandardDeviation(goals);
+        var maxConceded = conceded.Max();
+        var minConceded = conceded.Min();
+        var concededStdDev = CalculateStandardDeviation(conceded);
+        var maxGoalDifference = goalDifferences.Max();
+        var minGoalDifference = goalDifferences.Min();
+        var goalDifferenceStdDev = CalculateStandardDeviation(goalDifferences);
 
         writer.WriteLine($"{tacticName},{avgGoals:F2},{avgConceded:F2},{avgGoalDifference:F2},{avgPoints:F2},{maxPoints},{minPoints},{pointsStdDev:F2},{maxGoals},{minGoals},{goalsStdDev:F2},{maxConceded},{minConceded},{concededStdDev:F2},{maxGoalDifference},{minGoalDifference},{goalDifferenceStdDev:F2}");
     }
@@ -223,7 +223,7 @@ static void CalculateAndWriteStatistics(string consolidationFile, string statsFi
 
 static double CalculateStandardDeviation(List<int> values)
 {
-    double avg = values.Average();
-    double sumOfSquaresOfDifferences = values.Select(val => (val - avg) * (val - avg)).Sum();
+    var avg = values.Average();
+    var sumOfSquaresOfDifferences = values.Select(val => (val - avg) * (val - avg)).Sum();
     return Math.Sqrt(sumOfSquaresOfDifferences / values.Count);
 }
