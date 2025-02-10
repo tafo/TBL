@@ -225,5 +225,5 @@ static double CalculateStandardDeviation(List<int> values)
 {
     var avg = values.Average();
     var sumOfSquaresOfDifferences = values.Select(val => (val - avg) * (val - avg)).Sum();
-    return Math.Sqrt(sumOfSquaresOfDifferences / values.Count);
+    return Math.Sqrt(sumOfSquaresOfDifferences / (values.Count - 1));
 }
