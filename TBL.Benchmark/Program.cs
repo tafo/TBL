@@ -7,6 +7,7 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var sourceFolder = config["SourceFolder"]!;
+var outputFile = config["ConsolidationFile"]!;
 
 if (!Directory.Exists(sourceFolder))
 {
@@ -14,105 +15,98 @@ if (!Directory.Exists(sourceFolder))
     return;
 }
 
-// Get all subdirectories in the root directory
 var subDirectories = Directory.GetDirectories(sourceFolder);
-
-var outputFile = config["ConsolidationFile"]!; // Path for the merged file
-
-// Delete existing consolidation file
 File.Delete(outputFile);
 
-for (var fileIndex = 0; fileIndex < subDirectories.Length; fileIndex++)
+foreach (var subDir in subDirectories)
 {
-    var subDir = subDirectories[fileIndex];
-    var filePath = Path.Combine(subDir, "benchresult.txt"); // Construct the file path
-    var finalPath = @$"{subDir}\\BenchResultFormatted.csv";
-    var isCompleted = File.Exists(finalPath);
-    if (File.Exists(filePath) && !isCompleted)
+    var filePath = Path.Combine(subDir, "benchresult.txt");
+    var finalPath = Path.Combine(subDir, "BenchResultFormatted.csv");
+
+    if (File.Exists(filePath) && !File.Exists(finalPath))
     {
-        var lines = File.ReadAllLines(filePath);
-        var tabbedLines =
-            (from line in lines where line.Contains("PAS Giannina") select line.Replace(" ", "\t")).ToList();
-        var formattedLines = tabbedLines.Select(line => Regex.Split(line, @"\t+").Where(x => x != "C" && x != "R"))
-            .Select(parts => string.Join(",", parts)).ToList();
-
-        // Variables to store aggregated values
-        int totalMatches = 0, homeWins = 0, homeDraws = 0, homeLosses = 0;
-        int homeGoalsFor = 0, homeGoalsAgainst = 0, awayWins = 0, awayDraws = 0, awayLosses = 0;
-        int awayGoalsFor = 0, awayGoalsAgainst = 0, totalPoints = 0;
-
-        var lastDirectory = Path.GetFileName(subDir.TrimEnd(Path.DirectorySeparatorChar));
-
-        double seasonCount = formattedLines.Count;
-        for (var index = 0; index < formattedLines.Count; index++)
-        {
-            var line = formattedLines[index];
-            var parts = line.Split(',');
-            // Parsing numeric values and summing them up
-
-            int matches = int.Parse(parts[3]);
-            int hWins = int.Parse(parts[4]);
-            int hDraws = int.Parse(parts[5]);
-            int hLosses = int.Parse(parts[6]);
-            int hGoalsFor = int.Parse(parts[7]);
-            int hGoalsAgainst = int.Parse(parts[8]);
-            int aWins = int.Parse(parts[9]);
-            int aDraws = int.Parse(parts[10]);
-            int aLosses = int.Parse(parts[11]);
-            int aGoalsFor = int.Parse(parts[12]);
-            int aGoalsAgainst = int.Parse(parts[13]);
-            int points = int.Parse(parts[14]);
-
-
-            totalMatches += matches;
-            homeWins += hWins;
-            homeDraws += hDraws;
-            homeLosses += hLosses;
-            homeGoalsFor += hGoalsFor;
-            homeGoalsAgainst += hGoalsAgainst;
-            awayWins += aWins;
-            awayDraws += aDraws;
-            awayLosses += aLosses;
-            awayGoalsFor += aGoalsFor;
-            awayGoalsAgainst += aGoalsAgainst;
-            totalPoints += points;
-
-            formattedLines[index] = line + "," +
-                                    $"{lastDirectory}, {hGoalsFor + aGoalsFor}-{hGoalsAgainst + aGoalsAgainst}," +
-                                    $"{points},{matches},{hWins + aWins}_{hDraws + aDraws}_{hLosses + aLosses}";
-        }
-
-
-        // Create the total row
-        var totalRow =
-            $"Total,PAS,Giannina,{totalMatches},{homeWins},{homeDraws},{homeLosses},{homeGoalsFor},{homeGoalsAgainst}," +
-            $"{awayWins},{awayDraws},{awayLosses},{awayGoalsFor},{awayGoalsAgainst},{totalPoints}, ,{lastDirectory}, {(homeGoalsFor + awayGoalsFor) / seasonCount}-{(homeGoalsAgainst + awayGoalsAgainst) / seasonCount}," +
-            $"{totalPoints / seasonCount}, {totalMatches / seasonCount}, {(homeWins + awayWins) / seasonCount}_{(homeDraws + awayDraws) / seasonCount}_{(homeLosses + awayLosses) / seasonCount}";
-
-        // Append the total row to the data
-        formattedLines.Add(totalRow);
-        const string headerRow =
-            "Pos,Team, ,Pld,Won,Drn,Lst,For,Ag,Won,Drn,Lst,For,Ag,Pts, ,tactic_name, scored-conceded, points, games, wins_draws_losses";
-        formattedLines.Insert(0, headerRow);
-        File.WriteAllLines(finalPath, formattedLines);
-
-        Console.WriteLine($"Benchmark operation is completed for {lastDirectory}.");
-        
-        // Determine if we need to include the header or not
-        var includeHeader = fileIndex == 0;
-
-        using var writer = new StreamWriter(outputFile, true);
-
-        foreach (var line in includeHeader ? formattedLines : formattedLines.Skip(1))
-        {
-            writer.WriteLine(line);
-        }
-
-        // Flush once after all writes (optional, since Dispose() does this)
-        writer.Flush();
-
-        Console.WriteLine($"CSV files merged successfully for {lastDirectory}.!");
+        var formattedLines = ProcessFile(filePath, subDir);
+        WriteFormattedLines(finalPath, formattedLines);
+        AppendToConsolidationFile(outputFile, formattedLines, subDir == subDirectories[0]);
+        Console.WriteLine($"Benchmark operation is completed for {Path.GetFileName(subDir)}.");
     }
 }
 
 Console.ReadLine();
+
+List<string> ProcessFile(string filePath, string subDir)
+{
+    var lines = File.ReadAllLines(filePath);
+    var tabbedLines = lines.Where(line => line.Contains("PAS Giannina"))
+                           .Select(line => line.Replace(" ", "\t"))
+                           .ToList();
+
+    var formattedLines = tabbedLines.Select(line => Regex.Split(line, @"\t+")
+                                                         .Where(x => x != "C" && x != "R"))
+                                    .Select(parts => string.Join(",", parts))
+                                    .ToList();
+
+    var lastDirectory = Path.GetFileName(subDir.TrimEnd(Path.DirectorySeparatorChar));
+    double seasonCount = formattedLines.Count;
+
+    var (totalMatches, homeWins, homeDraws, homeLosses, homeGoalsFor, homeGoalsAgainst, awayWins, awayDraws, awayLosses, awayGoalsFor, awayGoalsAgainst, totalPoints) = 
+        AggregateValues(formattedLines);
+
+    for (var index = 0; index < formattedLines.Count; index++)
+    {
+        var line = formattedLines[index];
+        var parts = line.Split(',');
+
+        formattedLines[index] = $"{line},{lastDirectory},{parts[7] + parts[12]}-{parts[8] + parts[13]},{parts[14]},{parts[3]},{parts[4] + parts[9]}_{parts[5] + parts[10]}_{parts[6] + parts[11]}";
+    }
+
+    var totalRow = $"Total,PAS,Giannina,{totalMatches},{homeWins},{homeDraws},{homeLosses},{homeGoalsFor},{homeGoalsAgainst},{awayWins},{awayDraws},{awayLosses},{awayGoalsFor},{awayGoalsAgainst},{totalPoints}, ,{lastDirectory},{(homeGoalsFor + awayGoalsFor) / seasonCount}-{(homeGoalsAgainst + awayGoalsAgainst) / seasonCount},{totalPoints / seasonCount},{totalMatches / seasonCount},{(homeWins + awayWins) / seasonCount}_{(homeDraws + awayDraws) / seasonCount}_{(homeLosses + awayLosses) / seasonCount}";
+
+    formattedLines.Insert(0, "Pos,Team, ,Pld,Won,Drn,Lst,For,Ag,Won,Drn,Lst,For,Ag,Pts, ,tactic_name, scored-conceded, points, games, wins_draws_losses");
+    formattedLines.Add(totalRow);
+
+    return formattedLines;
+}
+
+void WriteFormattedLines(string finalPath, List<string> formattedLines)
+{
+    File.WriteAllLines(finalPath, formattedLines);
+}
+
+void AppendToConsolidationFile(string streamedFile, List<string> formattedLines, bool includeHeader)
+{
+    using var writer = new StreamWriter(streamedFile, true);
+    foreach (var line in includeHeader ? formattedLines : formattedLines.Skip(1))
+    {
+        writer.WriteLine(line);
+    }
+    writer.Flush();
+}
+
+(int totalMatches, int homeWins, int homeDraws, int homeLosses, int homeGoalsFor, int homeGoalsAgainst, int awayWins, int awayDraws, int awayLosses, int awayGoalsFor, int awayGoalsAgainst, int totalPoints) 
+AggregateValues(List<string> formattedLines)
+{
+    int totalMatches = 0, homeWins = 0, homeDraws = 0, homeLosses = 0;
+    int homeGoalsFor = 0, homeGoalsAgainst = 0, awayWins = 0, awayDraws = 0, awayLosses = 0;
+    int awayGoalsFor = 0, awayGoalsAgainst = 0, totalPoints = 0;
+
+    foreach (var line in formattedLines)
+    {
+        var parts = line.Split(',');
+
+        totalMatches += int.Parse(parts[3]);
+        homeWins += int.Parse(parts[4]);
+        homeDraws += int.Parse(parts[5]);
+        homeLosses += int.Parse(parts[6]);
+        homeGoalsFor += int.Parse(parts[7]);
+        homeGoalsAgainst += int.Parse(parts[8]);
+        awayWins += int.Parse(parts[9]);
+        awayDraws += int.Parse(parts[10]);
+        awayLosses += int.Parse(parts[11]);
+        awayGoalsFor += int.Parse(parts[12]);
+        awayGoalsAgainst += int.Parse(parts[13]);
+        totalPoints += int.Parse(parts[14]);
+    }
+
+    return (totalMatches, homeWins, homeDraws, homeLosses, homeGoalsFor, homeGoalsAgainst, awayWins, awayDraws, awayLosses, awayGoalsFor, awayGoalsAgainst, totalPoints);
+}
